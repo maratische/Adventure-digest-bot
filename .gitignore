@@ -1,0 +1,8 @@
+/PvdDigest.delete/
+/.gradle/
+/.idea/
+/.kotlin/
+/build/
+/pvdDigest.prop
+/testdb.mv.db
+/testdb.trace.db
