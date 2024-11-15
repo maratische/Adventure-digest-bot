@@ -16,6 +16,8 @@ class PostService(
 
     fun findByMessageId(messageId: Long): Post? = messageRepository.findByMessageId(messageId)
 
+    fun findAllModeratingPosts() = messageRepository.findByStatus(PostStatuses.MODERATING)
+
     /**
      * приходит сообщение,
      * если новое
@@ -33,7 +35,7 @@ class PostService(
         ) {
             if (messageDb == null) {//новое сообщение, сохраняем
                 messageDb = Post()
-                messageDb.messageId = messageDb.messageId
+                messageDb.messageId = messageIn.message_id
                 messageDb.user = user
                 messageDb.created = System.currentTimeMillis()
             }

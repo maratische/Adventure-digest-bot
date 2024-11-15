@@ -2,13 +2,15 @@ package maratische.telegram.pvddigest
 
 
 import maratische.telegram.pvddigest.model.User
+import maratische.telegram.pvddigest.model.UserRoles
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 
 @Service
 class TelegramService(
     userService: UserService,
-    postService: PostService
+    private val postService: PostService,
+    service: PostService
 ) {
     var telegramClient: TelegramClient = TelegramClient()
 
@@ -44,6 +46,17 @@ class TelegramService(
     fun processPrivate(messageIn: maratische.telegram.pvddigest.Message, user: User) {
         if (messageIn.text?.lowercase() == "help") {
             telegramClient.sendMessage(user.chatId.toString(), "Привет. Я бот дайджеста")
+        }
+        if (messageIn.text?.lowercase() == "/moder" && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
+            //список постов на модерацию
+            var list = postService.findAllModeratingPosts()
+            list.forEach { post ->
+                telegramClient.sendMessage(
+                    user.chatId.toString(), " ${post.date} - ${post.user?.username}\n" +
+                            "${post.messageId}\n" +
+                            "${post.content}"
+                )
+            }
         }
     }
 
