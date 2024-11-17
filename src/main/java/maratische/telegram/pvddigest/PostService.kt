@@ -1,22 +1,68 @@
 package maratische.telegram.pvddigest
 
+import maratische.telegram.pvddigest.event.PostEvent
+import maratische.telegram.pvddigest.event.TelegramSendMessageEvent
 import maratische.telegram.pvddigest.model.Post
 import maratische.telegram.pvddigest.model.PostStatuses
 import maratische.telegram.pvddigest.model.User
 import maratische.telegram.pvddigest.model.UserRoles
 import maratische.telegram.pvddigest.repository.PostRepository
+import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
+import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 import java.time.ZoneId
 
 @Service
-class PostService(
-    private val messageRepository: PostRepository
+open class PostService(
+    private val messageRepository: PostRepository,
+    private val eventPublisher: ApplicationEventPublisher
 ) {
 
     fun findByMessageId(messageId: Long): Post? = messageRepository.findByMessageId(messageId)
 
+    fun findById(messageId: Long) = messageRepository.findById(messageId)
+
     fun findAllModeratingPosts() = messageRepository.findByStatus(PostStatuses.MODERATING)
+
+    @EventListener(PostEvent::class)
+    open fun processPostEvent(postEvent: PostEvent) {
+        logger.info("process post {}", postEvent)
+        val postOptional = messageRepository.findById(postEvent.postId ?: return@processPostEvent)
+        if (postOptional.isPresent) {
+            val post = postOptional.get()
+            when (post.status) {
+                PostStatuses.DRAFT, PostStatuses.REJECTED -> {
+                    eventPublisher.publishEvent(TelegramSendMessageEvent(post.user?.chatId, postEvent.message))
+                }
+
+                PostStatuses.MODERATING -> {
+                    eventPublisher.publishEvent(
+                        TelegramSendMessageEvent(
+                            post.user?.chatId,
+                            "Пост будет добавлен после одобрения модератором"
+                        )
+                    )
+                    //написать модераторам
+                }
+
+                PostStatuses.PUBLISHED -> {
+                    eventPublisher.publishEvent(TelegramSendMessageEvent(post.user?.chatId, "Пост опубликован"))
+                    //написать модераторам
+                }
+
+                PostStatuses.CLOSED -> {
+                    eventPublisher.publishEvent(TelegramSendMessageEvent(post.user?.chatId, "Пост закрыт"))
+                    //написать модераторам
+                }
+
+                null -> {
+                    logger.info("empty status")
+                }
+            }
+        }
+    }
 
     /**
      * приходит сообщение,
@@ -29,35 +75,39 @@ class PostService(
      */
     fun processMessage(messageIn: maratische.telegram.pvddigest.Message, user: User): Post? {
         var messageText = messageIn.text ?: ""
-        var messageDb = findByMessageId(messageIn.message_id ?: 0L)
+        var postDb = findByMessageId(messageIn.message_id ?: 0L)
+        var message = ""
         if (messageText.lowercase().contains("#pvd")
             || messageText.lowercase().contains("#пвд")
         ) {
-            if (messageDb == null) {//новое сообщение, сохраняем
-                messageDb = Post()
-                messageDb.messageId = messageIn.message_id
-                messageDb.user = user
-                messageDb.created = System.currentTimeMillis()
+            if (postDb == null) {//новое сообщение, сохраняем
+                postDb = Post()
+                postDb.messageId = messageIn.message_id
+                postDb.user = user
+                postDb.created = System.currentTimeMillis()
             }
-            messageDb.content = messageText
-            messageDb.date = parseDate(messageText)
-            messageDb.updated = System.currentTimeMillis()
-            if ((messageDb.date ?: 0) > 0) {//готов к модерации
-                messageDb.status = if (user.role == UserRoles.BEGINNER) {
+            postDb.content = messageText
+            postDb.date = parseDate(messageText)
+            postDb.updated = System.currentTimeMillis()
+            if ((postDb.date ?: 0) > 0) {//готов к модерации
+                postDb.status = if (user.role == UserRoles.BEGINNER) {
                     PostStatuses.MODERATING
                 } else {
                     PostStatuses.PUBLISHED
                 }
             } else {
-                messageDb.status = PostStatuses.DRAFT
+                postDb.status = PostStatuses.DRAFT
                 //надо написать про ошибку
+                message = "Дата должна быть в формате #2024-11-29 или #2024-11-29Т18:00. Пост переведен в черновики." +
+                        " Обновите его пожалуйста"
             }
-            messageDb = save(messageDb)
-        } else if (messageDb != null) {//сообщение такое есть и стало пустым
-            messageDb.status = PostStatuses.DRAFT
-            messageDb = save(messageDb)
+            postDb = save(postDb)
+        } else if (postDb != null) {//сообщение такое есть и стало пустым
+            postDb.status = PostStatuses.DRAFT
+            postDb = save(postDb)
         }
-        return messageDb;
+        eventPublisher.publishEvent(PostEvent(postDb?.id, message))
+        return postDb;
     }
 
     val dateRegex = Regex("#(\\d{4})-(\\d{1,2})-(\\d{1,2})")
@@ -89,4 +139,8 @@ class PostService(
     }
 
     fun save(message: Post) = messageRepository.save(message)
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(PostService::class.java)
+    }
 }

@@ -39,7 +39,7 @@ class TelegramClient {
                     var responseBody = response.body?.string()
                     val entity: GetUpdates =
                         gson.fromJson(responseBody, GetUpdates::class.java)
-                    if (entity.ok && entity.result.isNotEmpty() ?: false) {
+                    if (entity.ok && entity.result.isNotEmpty()) {
                         entity.result.sortedBy { it.update_id }.forEach {
                             process!!.process(it)
 //                            processGetUpdatesItem(it)
@@ -65,7 +65,7 @@ class TelegramClient {
             if (message.lowercase().contains("#pvd")
                 || message.lowercase().contains("#пвд")
             ) {
-                if ((item.message?.chat?.title ?: null) == "pvd_test_chat") {
+                if ((item.message?.chat?.title) == "pvd_test_chat") {
 //                forwardMessage("pvd_test_channel", "pvd_test_chat", item.message?.message_id ?: 0L)
                     forwardMessage(
                         SettingsUtil.sourceChatId(),
@@ -114,7 +114,7 @@ class TelegramClient {
         }
     }
 
-    fun sendMessage(chatId: String, text: String) {
+    fun sendMessage(chatId: String, text: String, markup: String = "") {
         try {
             val multipartBody: MultipartBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM) // Header to show we are sending a Multipart Form Data
@@ -126,7 +126,8 @@ class TelegramClient {
                     "text",
                     "$text"
                 ) // other string params can be like userId, name or something
-//                .addFormDataPart("reply_markup", markup)
+                .addFormDataPart("reply_markup", markup)
+                .addFormDataPart("disable_notification", "true")
                 .build()
             val request: Request = Request.Builder()
                 .url("$baseUrl${secret}/sendMessage")
