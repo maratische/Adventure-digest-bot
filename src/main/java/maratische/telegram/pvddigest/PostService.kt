@@ -1,6 +1,8 @@
 package maratische.telegram.pvddigest
 
 import maratische.telegram.pvddigest.event.PostEvent
+import maratische.telegram.pvddigest.event.PublishDigestPostsEvent
+import maratische.telegram.pvddigest.event.TelegramPublishDigestEvent
 import maratische.telegram.pvddigest.event.TelegramSendMessageEvent
 import maratische.telegram.pvddigest.model.Post
 import maratische.telegram.pvddigest.model.PostStatuses
@@ -13,18 +15,32 @@ import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+
 
 @Service
 open class PostService(
     private val messageRepository: PostRepository,
     private val eventPublisher: ApplicationEventPublisher
 ) {
+    var formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
 
     fun findByMessageId(messageId: Long): Post? = messageRepository.findByMessageId(messageId)
 
     fun findById(messageId: Long) = messageRepository.findById(messageId)
 
     fun findAllModeratingPosts() = messageRepository.findByStatus(PostStatuses.MODERATING)
+
+    //сгенерировать пост дайджест
+    @EventListener(PublishDigestPostsEvent::class)
+    open fun publishPostsEvent(publishPostsEvent: PublishDigestPostsEvent) {
+        var posts = messageRepository.findByStatus(PostStatuses.PUBLISHED).sortedBy { it.date }
+        var mainPost = posts.map { post ->
+            " ${post.content} "
+        }.joinToString(separator = "\n\n")
+        eventPublisher.publishEvent(TelegramPublishDigestEvent("Дайджест ПВД (от ${formatter.format(LocalDateTime.now())})\n\n $mainPost"))
+    }
 
     @EventListener(PostEvent::class)
     open fun processPostEvent(postEvent: PostEvent) {
@@ -49,7 +65,7 @@ open class PostService(
 
                 PostStatuses.PUBLISHED -> {
                     eventPublisher.publishEvent(TelegramSendMessageEvent(post.user?.chatId, "Пост опубликован"))
-                    //написать модераторам
+                    eventPublisher.publishEvent(PublishDigestPostsEvent())
                 }
 
                 PostStatuses.CLOSED -> {

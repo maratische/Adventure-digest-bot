@@ -27,6 +27,10 @@ class SettingsUtil {
         fun saveOffset(offset: Long) {
             appProps.setProperty("telegram_offset", offset.toString())
         }
+        fun loadDigestMessageId(): Long = appProps.getProperty("digest_message", "0").toLong()
+        fun saveDigestMessageId(offset: Long) {
+            appProps.setProperty("digest_message", offset.toString())
+        }
 
         fun loadTelegramKey() = appProps.getProperty("telegram_key", "")
         fun loadTelegramKeySecondBot() = appProps.getProperty("telegram_key_second_bot", "")

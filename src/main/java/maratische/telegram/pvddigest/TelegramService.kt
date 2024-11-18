@@ -2,10 +2,13 @@ package maratische.telegram.pvddigest
 
 
 import maratische.telegram.pvddigest.event.PostEvent
+import maratische.telegram.pvddigest.event.PublishDigestPostsEvent
+import maratische.telegram.pvddigest.event.TelegramPublishDigestEvent
 import maratische.telegram.pvddigest.event.TelegramSendMessageEvent
 import maratische.telegram.pvddigest.model.PostStatuses
 import maratische.telegram.pvddigest.model.User
 import maratische.telegram.pvddigest.model.UserRoles
+import okhttp3.Response
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
@@ -46,6 +49,49 @@ open class TelegramService(
         })
     }
 
+    @EventListener(TelegramPublishDigestEvent::class)
+    open fun processTelegramPublishDigestEvent(event: TelegramPublishDigestEvent) {
+        logger.info(
+            "Publish digest {}",
+            event.message?.substring(0, 100.coerceAtMost(event.message.length)) ?: ""
+        )
+        SettingsUtil.sourceChatId().toLong()
+        var messageId = SettingsUtil.loadDigestMessageId()
+        if (event.message != null) {
+            if (messageId > 0) {
+                telegramClient.editMessage(
+                    SettingsUtil.sourceChatId(),
+                    messageId,
+                    event.message,
+                    onResponse = { acc: Response ->
+                        var responseBody = acc.body?.string()
+                        logger.info(responseBody)
+                        if (acc.code == 400) {
+                            SettingsUtil.saveDigestMessageId(0);
+                            SettingsUtil.save()
+                        }
+                        return@editMessage acc
+                    })
+            } else {
+                telegramClient.sendMessage(
+                    SettingsUtil.sourceChatId(),
+                    event.message,
+                    onResponse = { acc: Response ->
+                        if (acc.code == 200) {
+                            var responseBody = acc.body?.string()
+                            logger.info(responseBody)
+                            val entity: OnSendMessageReponse =
+                                telegramClient.gson.fromJson(responseBody, OnSendMessageReponse::class.java)
+                            messageId = entity.result.message_id
+                            logger.info("send New digest and return message_id $messageId")
+                            SettingsUtil.saveDigestMessageId(messageId);
+                            SettingsUtil.save()
+                        }
+                        return@sendMessage acc
+                    })
+            }
+        }
+    }
 
     @EventListener(TelegramSendMessageEvent::class)
     open fun processTelegramSendMessageEvent(event: TelegramSendMessageEvent) {
@@ -53,7 +99,7 @@ open class TelegramService(
             "send message to telegram {} {}", event.chatId,
             event.message?.substring(0, 100.coerceAtMost(event.message.length)) ?: ""
         )
-        if (event.chatId != null && event.chatId > 0 && event.message != null) {
+        if (event.chatId != null && event.message != null) {
             telegramClient.sendMessage(event.chatId.toString(), event.message)
         }
     }
@@ -64,6 +110,7 @@ open class TelegramService(
     fun processPrivate(messageIn: maratische.telegram.pvddigest.Message, user: User) {
         if (messageIn.text?.lowercase() == "help") {
             telegramClient.sendMessage(user.chatId.toString(), "Привет. Я бот дайджеста")
+            return
         }
         if (messageIn.text?.lowercase() == "/moder" && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
             //список постов на модерацию
@@ -83,6 +130,10 @@ open class TelegramService(
                     "{\"keyboard\":[" + buttons + "]}"
                 )
             }
+            return
+        }
+        if (messageIn.text?.lowercase() == "/digest" && user.role == UserRoles.ADMIN) {
+            eventPublisher.publishEvent(PublishDigestPostsEvent())
         }
         val matchConfirm = confirm.find(messageIn.text ?: "")
         if (matchConfirm != null) {
@@ -95,6 +146,7 @@ open class TelegramService(
                 post = postService.save(post)
                 eventPublisher.publishEvent(PostEvent(post.id!!))
             }
+            return
         }
         val matchDecline = decline.find(messageIn.text ?: "")
         if (matchDecline != null) {
@@ -107,6 +159,7 @@ open class TelegramService(
                 postService.save(post)
                 eventPublisher.publishEvent(PostEvent(post.id!!, "Пост отклонен"))
             }
+            return
         }
     }
 

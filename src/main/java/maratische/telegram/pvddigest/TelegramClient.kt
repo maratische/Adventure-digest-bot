@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import maratische.telegram.pvddigest.SettingsUtil.Companion.loadOffset
 import okhttp3.*
 import okhttp3.internal.EMPTY_REQUEST
+import org.slf4j.LoggerFactory
 import java.io.IOException
 
 class TelegramClient {
@@ -114,7 +115,10 @@ class TelegramClient {
         }
     }
 
-    fun sendMessage(chatId: String, text: String, markup: String = "") {
+    fun sendMessage(
+        chatId: String, text: String, markup: String = "",
+        onResponse: ((acc: Response) -> Response)? = null
+    ) {
         try {
             val multipartBody: MultipartBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM) // Header to show we are sending a Multipart Form Data
@@ -139,7 +143,7 @@ class TelegramClient {
                 }
 
                 override fun onResponse(call: Call, response: Response) {
-                    System.out.println("onResponse -> ${response.body?.string()}")
+                    if (onResponse != null) onResponse(response) else logger.info("onResponse Send -> ${response.body?.string()}")
                 }
             })
         } catch (e: Exception) {
@@ -148,11 +152,62 @@ class TelegramClient {
         }
     }
 
+    fun editMessage(
+        chatId: String, messageId: Long, text: String, markup: String = "",
+        onResponse: ((acc: Response) -> Response)? = null
+    ) {
+        try {
+            val multipartBody: MultipartBody = MultipartBody.Builder()
+                .setType(MultipartBody.FORM) // Header to show we are sending a Multipart Form Data
+                .addFormDataPart(
+                    "chat_id",
+                    "$chatId"
+                ) // other string params can be like userId, name or something
+                .addFormDataPart(
+                    "message_id",
+                    "$messageId"
+                ) // other string params can be like userId, name or something
+                .addFormDataPart(
+                    "text",
+                    "$text"
+                ) // other string params can be like userId, name or something
+                .addFormDataPart("reply_markup", markup)
+                .addFormDataPart("disable_notification", "true")
+                .build()
+            val request: Request = Request.Builder()
+                .url("$baseUrl${secret}/editMessageText")
+                .post(multipartBody)
+                .build()
+            client.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    sendError("onFailure: ${e.message}")
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (onResponse != null) onResponse(response) else logger.info("onResponse Edit -> ${response.body?.string()}")
+                }
+            })
+        } catch (e: Exception) {
+            sendError("onFailure: ${e.message}")
+            e.message
+        }
+    }
+
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(TelegramClient::class.java)
+    }
+
 }
 
 interface ItemProcess {
     fun process(item: GetUpdatesItem);
 }
+
+data class OnSendMessageReponse(
+    var ok: Boolean,
+    var result: Message
+)
 
 data class GetUpdates(
     var ok: Boolean,
