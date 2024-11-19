@@ -9,18 +9,18 @@ import java.util.*
 class SettingsUtil {
 
     companion object {
-        var appProps = Properties();
+        var appProps = Properties()
 
         init {
             try {
-                appProps.load(FileInputStream("pvdDigest.prop"));
+                appProps.load(FileInputStream("pvdDigest.prop"))
             } catch (e: FileNotFoundException) {
-                appProps.store(FileOutputStream("pvdDigest.prop"), null);
+                appProps.store(FileOutputStream("pvdDigest.prop"), null)
             }
         }
 
         fun save() {
-            appProps.store(FileOutputStream("pvdDigest.prop"), null);
+            appProps.store(FileOutputStream("pvdDigest.prop"), null)
         }
 
         fun loadOffset(): Long = appProps.getProperty("telegram_offset", "0").toLong()
@@ -37,6 +37,7 @@ class SettingsUtil {
         fun timeout(): Long = appProps.getProperty("timeoutInMS", "10000").toLong()
         fun destinationChannelId(): String = appProps.getProperty("destination_channel_id", "10000")
         fun sourceChatId(): String = appProps.getProperty("source_chat_id", "10000")
+        fun publicSourceChatId(): String = appProps.getProperty("public_source_chat_id", "10000")
 
     }
 }

@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -25,6 +26,8 @@ open class PostService(
     private val eventPublisher: ApplicationEventPublisher
 ) {
     var formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+    val dateRegex = Regex("#(\\d{4})-(\\d{1,2})-(\\d{1,2})")
+    val dateTimeRegex = Regex("#(\\d{4})-(\\d{1,2})-(\\d{1,2})[TТ](\\d{1,2}):(\\d{1,2})")
 
     fun findByMessageId(messageId: Long): Post? = messageRepository.findByMessageId(messageId)
 
@@ -35,9 +38,20 @@ open class PostService(
     //сгенерировать пост дайджест
     @EventListener(PublishDigestPostsEvent::class)
     open fun publishPostsEvent(publishPostsEvent: PublishDigestPostsEvent) {
-        var posts = messageRepository.findByStatus(PostStatuses.PUBLISHED).sortedBy { it.date }
-        var mainPost = posts.map { post ->
-            " ${post.content} "
+        val posts = messageRepository.findByStatus(PostStatuses.PUBLISHED).sortedBy { it.date }
+        val mainPost = posts.map { post ->
+            var content = (post.content ?: "").replace(dateTimeRegex, " ").replace(dateRegex, "")
+            content = content.substring(0, 200.coerceAtMost(content.length))
+            "${
+                formatter.format(
+                    LocalDateTime.ofInstant(
+                        Instant.ofEpochMilli(post.date ?: 0),
+                        ZoneId.systemDefault()
+                    )
+                )
+            }\n" +
+                    "${content}\n" +
+                    "https://t.me/c/${SettingsUtil.publicSourceChatId()}/${post.messageId}"
         }.joinToString(separator = "\n\n")
         eventPublisher.publishEvent(TelegramPublishDigestEvent("Дайджест ПВД (от ${formatter.format(LocalDateTime.now())})\n\n $mainPost"))
     }
@@ -90,7 +104,7 @@ open class PostService(
      * - DRAFT, MODERATING, PUBLISHED и чего то не  хватает - DRAFT (в будущем переделать на версии и роли)
      */
     fun processMessage(messageIn: maratische.telegram.pvddigest.Message, user: User): Post? {
-        var messageText = messageIn.text ?: ""
+        val messageText = messageIn.text ?: ""
         var postDb = findByMessageId(messageIn.message_id ?: 0L)
         var message = ""
         if (messageText.lowercase().contains("#pvd")
@@ -123,11 +137,8 @@ open class PostService(
             postDb = save(postDb)
         }
         eventPublisher.publishEvent(PostEvent(postDb?.id, message))
-        return postDb;
+        return postDb
     }
-
-    val dateRegex = Regex("#(\\d{4})-(\\d{1,2})-(\\d{1,2})")
-    val dateTimeRegex = Regex("#(\\d{4})-(\\d{1,2})-(\\d{1,2})[TТ](\\d{1,2}):(\\d{1,2})")
 
     /**
      * парсим дату из сообщения
@@ -137,21 +148,21 @@ open class PostService(
     fun parseDate(message: String): Long {
         val matchTime = dateTimeRegex.find(message)
         if (matchTime != null) {
-            var date = LocalDateTime.of(
+            val date = LocalDateTime.of(
                 matchTime.groupValues[1].toInt(), matchTime.groupValues[2].toInt(),
                 matchTime.groupValues[3].toInt(), matchTime.groupValues[4].toInt(), matchTime.groupValues[5].toInt()
-            );
-            return date.atZone(ZoneId.systemDefault()).toEpochSecond() * 1000;
+            )
+            return date.atZone(ZoneId.systemDefault()).toEpochSecond() * 1000
         }
         val match = dateRegex.find(message)
         if (match != null) {
-            var date = LocalDateTime.of(
+            val date = LocalDateTime.of(
                 match.groupValues[1].toInt(), match.groupValues[2].toInt(),
                 match.groupValues[3].toInt(), 0, 0
-            );
-            return date.atZone(ZoneId.systemDefault()).toEpochSecond() * 1000;
+            )
+            return date.atZone(ZoneId.systemDefault()).toEpochSecond() * 1000
         }
-        return 0;
+        return 0
     }
 
     fun save(message: Post) = messageRepository.save(message)
