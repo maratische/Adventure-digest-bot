@@ -14,6 +14,7 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import kotlin.jvm.optionals.getOrNull
 
 @Service
 open class TelegramService(
@@ -107,7 +108,8 @@ open class TelegramService(
     val confirm = Regex("/confirm_(\\d+)")
     val decline = Regex("/decline_(\\d+)")
 
-    fun processPrivate(messageIn: maratische.telegram.pvddigest.Message, user: User) {
+    //    @Transactional
+    open fun processPrivate(messageIn: maratische.telegram.pvddigest.Message, user: User) {
         if (messageIn.text?.lowercase() == "help") {
             telegramClient.sendMessage(user.chatId.toString(), "Привет. Я бот дайджеста")
             return
@@ -123,11 +125,12 @@ open class TelegramService(
                         "{\"text\":\"/decline_${post.id}\",\"hide\":false}]"
             }.joinToString(separator = ",")
             list.forEach { post ->
+                val user2 = userService.findById(post.userId).getOrNull()
                 telegramClient.sendMessage(
-                    user.chatId.toString(), " ${post.date} - ${post.user?.username}\n" +
+                    user?.chatId.toString(), " ${post.date} - ${user2?.username}\n" +
                             "${post.id}\n" +
                             "${post.content}",
-                    "{\"keyboard\":[" + buttons + "]}"
+                    "{\"keyboard\":[[{\"text\":\"/moder\",\"hide\":false}]," + buttons + "]}"
                 )
             }
             return
@@ -136,7 +139,7 @@ open class TelegramService(
             eventPublisher.publishEvent(PublishDigestPostsEvent())
         }
         val matchConfirm = confirm.find(messageIn.text ?: "")
-        if (matchConfirm != null) {
+        if (matchConfirm != null && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
             val id = matchConfirm.groupValues[1].toLong()
             val postOptional = postService.findById(id)
             if (postOptional.isPresent && postOptional.get().status == PostStatuses.MODERATING) {
@@ -149,7 +152,7 @@ open class TelegramService(
             return
         }
         val matchDecline = decline.find(messageIn.text ?: "")
-        if (matchDecline != null) {
+        if (matchDecline != null && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
             val id = matchDecline.groupValues[1].toLong()
             val postOptional = postService.findById(id)
             if (postOptional.isPresent && postOptional.get().status == PostStatuses.MODERATING) {

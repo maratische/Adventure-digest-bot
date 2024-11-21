@@ -17,13 +17,14 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-
+import kotlin.jvm.optionals.getOrNull
 
 
 @Service
 open class PostService(
     private val messageRepository: PostRepository,
-    private val eventPublisher: ApplicationEventPublisher
+    private val eventPublisher: ApplicationEventPublisher,
+    private val userService: UserService
 ) {
     var formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
     val dateRegex = Regex("#(\\d{4})-(\\d{1,2})-(\\d{1,2})")
@@ -36,9 +37,15 @@ open class PostService(
     fun findAllModeratingPosts() = messageRepository.findByStatus(PostStatuses.MODERATING)
 
     //сгенерировать пост дайджест
+//    @Transactional
     @EventListener(PublishDigestPostsEvent::class)
     open fun publishPostsEvent(publishPostsEvent: PublishDigestPostsEvent) {
         val posts = messageRepository.findByStatus(PostStatuses.PUBLISHED).sortedBy { it.date }
+        posts.filter { (it.date ?: 0) < System.currentTimeMillis() }.forEach {
+            it.status = PostStatuses.CLOSED
+            save(it)
+            eventPublisher.publishEvent(PostEvent(it.id))
+        }
         val mainPost = posts.map { post ->
             var content = (post.content ?: "").replace(dateTimeRegex, " ").replace(dateRegex, "")
             content = content.substring(0, 200.coerceAtMost(content.length))
@@ -62,28 +69,38 @@ open class PostService(
         val postOptional = messageRepository.findById(postEvent.postId ?: return@processPostEvent)
         if (postOptional.isPresent) {
             val post = postOptional.get()
+            val user = userService.findById(post.userId).getOrNull()
             when (post.status) {
                 PostStatuses.DRAFT, PostStatuses.REJECTED -> {
-                    eventPublisher.publishEvent(TelegramSendMessageEvent(post.user?.chatId, postEvent.message))
+                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, postEvent.message))
                 }
 
                 PostStatuses.MODERATING -> {
                     eventPublisher.publishEvent(
                         TelegramSendMessageEvent(
-                            post.user?.chatId,
+                            user?.chatId,
                             "Пост будет добавлен после одобрения модератором"
                         )
                     )
                     //написать модераторам
+                    var moderators = userService.listModerators()
+                    moderators.forEach {
+                        eventPublisher.publishEvent(
+                            TelegramSendMessageEvent(
+                                it.chatId,
+                                post.content
+                            )
+                        )
+                    }
                 }
 
                 PostStatuses.PUBLISHED -> {
-                    eventPublisher.publishEvent(TelegramSendMessageEvent(post.user?.chatId, "Пост опубликован"))
+                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, "Пост опубликован"))
                     eventPublisher.publishEvent(PublishDigestPostsEvent())
                 }
 
                 PostStatuses.CLOSED -> {
-                    eventPublisher.publishEvent(TelegramSendMessageEvent(post.user?.chatId, "Пост закрыт"))
+                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, "Пост закрыт {short_text}"))
                     //написать модераторам
                 }
 
@@ -103,7 +120,8 @@ open class PostService(
      * - DRAFT, MODERATING, PUBLISHED и всего хватает - MODERATING
      * - DRAFT, MODERATING, PUBLISHED и чего то не  хватает - DRAFT (в будущем переделать на версии и роли)
      */
-    fun processMessage(messageIn: maratische.telegram.pvddigest.Message, user: User): Post? {
+//    @Transactional
+    open fun processMessage(messageIn: maratische.telegram.pvddigest.Message, user: User): Post? {
         val messageText = messageIn.text ?: ""
         var postDb = findByMessageId(messageIn.message_id ?: 0L)
         var message = ""
@@ -113,7 +131,7 @@ open class PostService(
             if (postDb == null) {//новое сообщение, сохраняем
                 postDb = Post()
                 postDb.messageId = messageIn.message_id
-                postDb.user = user
+                postDb.userId = user.id
                 postDb.created = System.currentTimeMillis()
             }
             postDb.content = messageText
@@ -136,7 +154,9 @@ open class PostService(
             postDb.status = PostStatuses.DRAFT
             postDb = save(postDb)
         }
-        eventPublisher.publishEvent(PostEvent(postDb?.id, message))
+        postDb?.let {
+            eventPublisher.publishEvent(PostEvent(postDb.id, message))
+        }
         return postDb
     }
 

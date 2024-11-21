@@ -7,4 +7,7 @@ class PostEvent(
     val postId: Long?,
     val message: String? = null,
 ) {
+    override fun toString(): String {
+        return "PostEvent($postId, $message)"
+    }
 }

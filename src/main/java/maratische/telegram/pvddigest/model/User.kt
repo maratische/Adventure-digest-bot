@@ -13,6 +13,9 @@ class User {
     @Column(name = "username", columnDefinition = "varchar(255)")
     var username: String? = null
 
+    @Column(name = "firstname", columnDefinition = "varchar(255)")
+    var firstname: String? = null
+
     @Column(name = "telegram_id", columnDefinition = "bigint", unique = true)
     var telegramId: Long? = null
 

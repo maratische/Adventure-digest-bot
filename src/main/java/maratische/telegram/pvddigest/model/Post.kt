@@ -13,9 +13,11 @@ class Post {
     @Column(name = "message_id", columnDefinition = "bigint", unique = true)
     var messageId: Long? = null
 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
-    var user: User? = null
+    //    @ManyToOne//(cascade = [(CascadeType.ALL)])
+//    @JoinColumn(name = "user_id")
+//    var user: User? = null
+    @Column(name = "user_id", columnDefinition = "bigint")
+    var userId: Long? = null
 
     @Lob
     var content: String? = null
