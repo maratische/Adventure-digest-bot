@@ -52,12 +52,12 @@ open class TelegramService(
 
     @EventListener(TelegramPublishDigestEvent::class)
     open fun processTelegramPublishDigestEvent(event: TelegramPublishDigestEvent) {
-        logger.info(
-            "Publish digest {}",
-            event.message?.substring(0, 100.coerceAtMost(event.message.length)) ?: ""
-        )
         SettingsUtil.sourceChatId().toLong()
         var messageId = SettingsUtil.loadDigestMessageId()
+        logger.info(
+            "Publish digest messageId {} {}", messageId,
+            event.message?.substring(0, 100.coerceAtMost(event.message.length)) ?: ""
+        )
         if (event.message != null) {
             if (messageId > 0) {
                 telegramClient.editMessage(
@@ -107,12 +107,40 @@ open class TelegramService(
 
     val confirm = Regex("/confirm_(\\d+)")
     val decline = Regex("/decline_(\\d+)")
+    val closed = Regex("/closed[_-](\\d+)")
 
     //    @Transactional
     open fun processPrivate(messageIn: maratische.telegram.pvddigest.Message, user: User) {
         if (messageIn.text?.lowercase() == "help") {
             telegramClient.sendMessage(user.chatId.toString(), "Привет. Я бот дайджеста")
             return
+        }
+        if (messageIn.text?.lowercase() == "/list" && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
+            //список постов на дайджесте
+            var list = postService.findAllPublishedPosts()
+            var buttons = "[{\"text\":\"/_1\",\"hide\":false}," +
+                    "{\"text\":\"/closed_1\",\"hide\":false}]"
+            list.forEach { post ->
+                val user2 = userService.findById(post.userId).getOrNull()
+                telegramClient.sendMessage(
+                    user?.chatId.toString(), "${post.messageId}\n" +
+                            "${post.content}",
+                    "{\"keyboard\":[[{\"text\":\"/moder\",\"hide\":false},{\"text\":\"/list\",\"hide\":false}]," + buttons + "]}"
+                )
+            }
+            return
+        }
+        val matchClosed = closed.find(messageIn.text ?: "")
+        if (matchClosed != null && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
+            val id = matchClosed.groupValues[1].toLong()
+            val postOptional = postService.findByMessageId(id)
+            if (postOptional != null) {
+                postOptional.status = PostStatuses.CLOSED
+                postService.save(postOptional)
+                logger.info("Пост закрыт {} модератором {}", postOptional, user)
+                eventPublisher.publishEvent(PostEvent(postOptional.id!!, "Пост отклонен"))
+                eventPublisher.publishEvent(PublishDigestPostsEvent())
+            }
         }
         if (messageIn.text?.lowercase() == "/moder" && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
             //список постов на модерацию
@@ -130,7 +158,7 @@ open class TelegramService(
                     user?.chatId.toString(), " ${post.date} - ${user2?.username}\n" +
                             "${post.id}\n" +
                             "${post.content}",
-                    "{\"keyboard\":[[{\"text\":\"/moder\",\"hide\":false}]," + buttons + "]}"
+                    "{\"keyboard\":[[{\"text\":\"/moder\",\"hide\":false},{\"text\":\"/list\",\"hide\":false}]," + buttons + "]}"
                 )
             }
             return

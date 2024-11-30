@@ -226,7 +226,8 @@ data class Message(
     var from: MessageUser?,
     var chat: MessageChat?,
     var date: Long,
-    var text: String?
+    var text: String?,
+    var reply_to_message: Message?,
 )
 
 data class MessageUser(

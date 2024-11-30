@@ -36,6 +36,8 @@ open class PostService(
 
     fun findAllModeratingPosts() = messageRepository.findByStatus(PostStatuses.MODERATING)
 
+    fun findAllPublishedPosts() = messageRepository.findByStatus(PostStatuses.PUBLISHED)
+
     //сгенерировать пост дайджест
 //    @Transactional
     @EventListener(PublishDigestPostsEvent::class)
@@ -48,7 +50,7 @@ open class PostService(
         }
         val mainPost = posts.map { post ->
             var content = (post.content ?: "").replace(dateTimeRegex, " ").replace(dateRegex, "")
-            content = content.substring(0, 200.coerceAtMost(content.length))
+            content = short200(content)
             "${
                 formatter.format(
                     LocalDateTime.ofInstant(
@@ -60,8 +62,16 @@ open class PostService(
                     "${content}\n" +
                     "https://t.me/c/${SettingsUtil.publicSourceChatId()}/${post.messageId}"
         }.joinToString(separator = "\n\n")
-        eventPublisher.publishEvent(TelegramPublishDigestEvent("Дайджест ПВД (от ${formatter.format(LocalDateTime.now())})\n\n $mainPost"))
+        eventPublisher.publishEvent(
+            TelegramPublishDigestEvent(
+                "Дайджест ПВД (от ${formatter.format(LocalDateTime.now())})\n\n $mainPost \n\n" +
+                        "Для попадания в дайджест сообщение должно содержать тег #пвд, дату в формате #2024-11-29 или #2024-11-29Т18:00\n" +
+                        "и его должен одобрить модератор"
+            )
+        )
     }
+
+    private fun short200(content: String?) = content?.substring(0, 200.coerceAtMost(content.length)) ?: ""
 
     @EventListener(PostEvent::class)
     open fun processPostEvent(postEvent: PostEvent) {
@@ -79,7 +89,7 @@ open class PostService(
                     eventPublisher.publishEvent(
                         TelegramSendMessageEvent(
                             user?.chatId,
-                            "Пост будет добавлен после одобрения модератором"
+                            "Пост будет добавлен после одобрения модератором. ${short200(post.content)}"
                         )
                     )
                     //написать модераторам
@@ -95,12 +105,17 @@ open class PostService(
                 }
 
                 PostStatuses.PUBLISHED -> {
-                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, "Пост опубликован"))
+                    eventPublisher.publishEvent(
+                        TelegramSendMessageEvent(
+                            user?.chatId,
+                            "Пост опубликован. ${short200(post.content)}"
+                        )
+                    )
                     eventPublisher.publishEvent(PublishDigestPostsEvent())
                 }
 
                 PostStatuses.CLOSED -> {
-                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, "Пост закрыт {short_text}"))
+                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, "Пост закрыт. ${post.content}"))
                     //написать модераторам
                 }
 
@@ -119,12 +134,32 @@ open class PostService(
      * если уже имеющееся
      * - DRAFT, MODERATING, PUBLISHED и всего хватает - MODERATING
      * - DRAFT, MODERATING, PUBLISHED и чего то не  хватает - DRAFT (в будущем переделать на версии и роли)
+     *
+     * /digest #2024-12-12
+     * если сообщение является ответом на  другое и автор - админ-модератор, добавляем его в дайджест
      */
 //    @Transactional
     open fun processMessage(messageIn: maratische.telegram.pvddigest.Message, user: User): Post? {
+        logger.info("process post {} from {}", messageIn, user)
         val messageText = messageIn.text ?: ""
         var postDb = findByMessageId(messageIn.message_id ?: 0L)
         var message = ""
+        if (messageText.lowercase().startsWith("/digest ") && messageIn.reply_to_message != null
+            && (user.role == UserRoles.ADMIN || user.role == UserRoles.MODERATOR)
+        ) {
+            val date = parseDate(messageText)
+            if (date > 0) {
+                postDb = findByMessageId(messageIn.reply_to_message?.message_id ?: 0L) ?: Post()
+                postDb.messageId = messageIn.reply_to_message?.message_id
+                postDb.userId = user.id
+                postDb.created = System.currentTimeMillis()
+                postDb.status = PostStatuses.PUBLISHED
+                postDb.content = messageIn.reply_to_message?.text
+                postDb.date = parseDate(messageText)
+                postDb.updated = System.currentTimeMillis()
+                postDb = save(postDb)
+            }
+        } else
         if (messageText.lowercase().contains("#pvd")
             || messageText.lowercase().contains("#пвд")
         ) {

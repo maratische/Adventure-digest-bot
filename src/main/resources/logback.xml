@@ -21,6 +21,7 @@
         </encoder>
     </appender>
 
+    <logger name="com.zaxxer.hikari.pool.HikariPool" level="ERROR"/>
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="FILE"/>
