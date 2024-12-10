@@ -28,4 +28,6 @@ class User {
      */
     @Column(name = "chat_id", columnDefinition = "bigint", unique = true)
     var chatId: Long? = null
+
+    override fun toString(): String = "User($id, $username, $firstname, $telegramId, $role, $chatId)"
 }

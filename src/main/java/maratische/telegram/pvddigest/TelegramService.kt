@@ -34,7 +34,7 @@ open class TelegramService(
                     if (message.chat?.id == SettingsUtil.sourceChatId().toLong()) {
                         //работаем с нашей группой
                         postService.processMessage(message, user)
-                    }
+                    } else
                     if (item.message?.chat?.type == "private") {
                         //персональный чат
                         if (user.chatId == null) {
@@ -42,6 +42,8 @@ open class TelegramService(
                             userService.save(user)
                         }
                         processPrivate(item.message!!, user)
+                    } else {
+                        logger.info("process post in unknown chat {} message {}", item.message?.chat, message)
                     }
                 }
                 SettingsUtil.saveOffset(item.update_id)
@@ -111,8 +113,17 @@ open class TelegramService(
 
     //    @Transactional
     open fun processPrivate(messageIn: maratische.telegram.pvddigest.Message, user: User) {
-        if (messageIn.text?.lowercase() == "help") {
-            telegramClient.sendMessage(user.chatId.toString(), "Привет. Я бот дайджеста")
+        if (messageIn.text?.lowercase() == "/help" || messageIn.text?.lowercase() == "help") {
+            var text = "Привет. Я бот дайджеста.\n" +
+                    "список команд\n"
+            text += "/help - помощь, список доступных команд\n"
+            if ((user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
+                text += "/list - список постов на дайджесте\n"
+                text += "/moder - список на подерацию\n"
+                text += "/digest - перегенерирует дайджест\n"
+                text += "/digest #2024-12-12 - ответ на какое то сообщение, добавляет его в дайджест\n"
+            }
+            telegramClient.sendMessage(user.chatId.toString(), text)
             return
         }
         if (messageIn.text?.lowercase() == "/list" && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {

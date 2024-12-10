@@ -14,8 +14,9 @@ public class PvdDigestApplication {
         var ctx = SpringApplication.run(PvdDigestApplication.class, args);
         SettingsUtil.Companion.getAppProps();
         var aa = 0;
-        while (aa != 10) {
+        while (aa != 1) {
             aa = System.in.read();
+            System.out.println(aa);
             Thread.sleep(1000);
         }
         ctx.close();

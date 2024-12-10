@@ -12,7 +12,7 @@ class PvdDigestApplicationTests {
         //PvdDigest_dev2_bot
         telegramService.setSecret(SettingsUtil.Companion.loadTelegramKeySecondBot());
         telegramService.getAllTelegramUpdates();
-        telegramService.sendMessage("-1002179941104", "Привет! это тестовый процесс");
+        telegramService.sendMessage("-1002179941104", "Привет! это тестовый процесс", "", null);
     }
 
 }

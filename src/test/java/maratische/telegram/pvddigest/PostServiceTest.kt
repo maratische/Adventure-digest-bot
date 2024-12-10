@@ -12,6 +12,7 @@ import org.mockito.Mock
 import org.mockito.Mockito.any
 import org.mockito.Mockito.`when`
 import org.mockito.MockitoAnnotations
+import org.springframework.context.ApplicationEventPublisher
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -19,6 +20,12 @@ class PostServiceTest {
 
     @Mock
     private lateinit var messageRepository: PostRepository
+
+    @Mock
+    private lateinit var eventPublisher: ApplicationEventPublisher
+
+    @Mock
+    private lateinit var userService: UserService
 
     @InjectMocks
     private lateinit var messageService: PostService
@@ -70,7 +77,7 @@ class PostServiceTest {
         user.username = "test"
         user.role = UserRoles.BEGINNER
 
-        var message = Message(1L, null, null, System.currentTimeMillis(), "text #pvd #2024-11-29 test");
+        var message = Message(1L, null, null, System.currentTimeMillis(), "text #pvd #2024-11-29 test", null);
         `when`(messageRepository.save(any(maratische.telegram.pvddigest.model.Post::class.java)))
             .thenAnswer { t -> t.arguments[0] }
 
@@ -89,7 +96,7 @@ class PostServiceTest {
         user.username = "test"
         user.role = UserRoles.BEGINNER
 
-        var message = Message(1L, null, null, System.currentTimeMillis(), "text #pvd 2024-11-29 test");
+        var message = Message(1L, null, null, System.currentTimeMillis(), "text #pvd 2024-11-29 test", null);
         `when`(messageRepository.save(any(maratische.telegram.pvddigest.model.Post::class.java)))
             .thenAnswer { t -> t.arguments[0] }
 
@@ -108,7 +115,7 @@ class PostServiceTest {
         user.username = "test"
         user.role = UserRoles.TRAVELER
 
-        var message = Message(1L, null, null, System.currentTimeMillis(), "text #pvd #2024-11-29 test");
+        var message = Message(1L, null, null, System.currentTimeMillis(), "text #pvd #2024-11-29 test", null);
         `when`(messageRepository.save(any(maratische.telegram.pvddigest.model.Post::class.java)))
             .thenAnswer { t -> t.arguments[0] }
 

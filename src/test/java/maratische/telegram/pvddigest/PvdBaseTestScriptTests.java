@@ -12,8 +12,8 @@ public class PvdBaseTestScriptTests {
         telegramService.setSecret(SettingsUtil.Companion.loadTelegramKeySecondBot());
         var chatId = "-1002179941104";
         var rand = Integer.toString(new Random().nextInt(1000));
-        telegramService.sendMessage(chatId, "Привет! это тестовый процесс " + rand);
+        telegramService.sendMessage(chatId, "Привет! это тестовый процесс " + rand, "", null);
         Thread.sleep(10000);
-        telegramService.sendMessage(chatId, "Пошли в поход. #pvd  " + rand);
+        telegramService.sendMessage(chatId, "Пошли в поход. #pvd  " + rand, "null", null);
     }
 }
