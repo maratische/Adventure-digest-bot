@@ -4,14 +4,13 @@ import maratische.telegram.pvddigest.event.PostEvent
 import maratische.telegram.pvddigest.event.PublishDigestPostsEvent
 import maratische.telegram.pvddigest.event.TelegramPublishDigestEvent
 import maratische.telegram.pvddigest.event.TelegramSendMessageEvent
-import maratische.telegram.pvddigest.model.Post
-import maratische.telegram.pvddigest.model.PostStatuses
-import maratische.telegram.pvddigest.model.User
-import maratische.telegram.pvddigest.model.UserRoles
+import maratische.telegram.pvddigest.model.*
 import maratische.telegram.pvddigest.repository.PostRepository
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
+import org.springframework.statemachine.config.StateMachineFactory
+import org.springframework.statemachine.persist.StateMachineRuntimePersister
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.LocalDateTime
@@ -24,7 +23,13 @@ import kotlin.jvm.optionals.getOrNull
 open class PostService(
     private val messageRepository: PostRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val userService: UserService
+    private val userService: UserService,
+//    private val postMachine: StateMachine<PostStatuses, PostEvents>,
+//    private val stateMachineRuntimePersister: StateMachineRuntimePersister<PostStatuses, PostEvents, String>,
+    private val stateMachineFactory: StateMachineFactory<PostStatuses, PostEvents>,
+    private val stateMachineService: StateMachineService,
+    private val stateMachineRuntimePersister: StateMachineRuntimePersister<PostStatuses, PostEvents, String>
+
 ) {
     var formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
     val dateRegex = Regex("#(\\d{4})-(\\d{1,2})-(\\d{1,2})")
@@ -42,6 +47,9 @@ open class PostService(
 //    @Transactional
     @EventListener(PublishDigestPostsEvent::class)
     open fun publishPostsEvent(publishPostsEvent: PublishDigestPostsEvent) {
+        val published = stateMachineService.getMachinesInState(PostStatuses.PUBLISHED.name)
+        System.out.println("published: $published")
+
         val posts = messageRepository.findByStatus(PostStatuses.PUBLISHED).sortedBy { it.date }
         posts.filter { (it.date ?: 0) < System.currentTimeMillis() }.forEach {
             it.status = PostStatuses.CLOSED
@@ -172,23 +180,36 @@ open class PostService(
             postDb.content = messageText
             postDb.date = parseDate(messageText)
             postDb.updated = System.currentTimeMillis()
+            postDb.status = PostStatuses.DRAFT
+            postDb = save(postDb)
+            val pm = stateMachineFactory.getStateMachine(postDb?.id.toString())
+            // Добавляем персистентность
+            stateMachineRuntimePersister.persist(stateMachine, orderId);
+            pm.start()
+
             if ((postDb.date ?: 0) > 0) {//готов к модерации
                 postDb.status = if (user.role == UserRoles.BEGINNER) {
+                    pm.sendEvent(PostEvents.MODERATE)
                     PostStatuses.MODERATING
                 } else {
+                    pm.sendEvent(PostEvents.PUBLISH)
                     PostStatuses.PUBLISHED
                 }
             } else {
+                pm.sendEvent(PostEvents.DRAFTED)
                 postDb.status = PostStatuses.DRAFT
                 //надо написать про ошибку
                 message = "Дата должна быть в формате #2024-11-29 или #2024-11-29Т18:00. Пост переведен в черновики." +
                         " Обновите его пожалуйста"
             }
             postDb = save(postDb)
+            pm.stop()
         } else if (postDb != null) {//сообщение такое есть и стало пустым
             postDb.status = PostStatuses.DRAFT
             postDb = save(postDb)
         }
+//        var id = postMachine.id
+//        var uuid = postMachine.uuid
         postDb?.let {
             eventPublisher.publishEvent(PostEvent(postDb.id, message))
         }
