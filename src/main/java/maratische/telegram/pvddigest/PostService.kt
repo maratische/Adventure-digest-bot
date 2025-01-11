@@ -48,7 +48,7 @@ open class PostService(
             save(it)
             eventPublisher.publishEvent(PostEvent(it.id))
         }
-        val mainPost = posts.map { post ->
+        val mainPost = posts.filter { (it.date ?: 0) >= System.currentTimeMillis() }.map { post ->
             var content = (post.content ?: "").replace(dateTimeRegex, " ").replace(dateRegex, "")
             content = short200(content)
             "${
