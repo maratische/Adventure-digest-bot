@@ -1,9 +1,6 @@
 package maratische.telegram.pvddigest
 
 import maratische.telegram.pvddigest.event.PostEvent
-import maratische.telegram.pvddigest.event.PublishDigestPostsEvent
-import maratische.telegram.pvddigest.event.TelegramPublishDigestEvent
-import maratische.telegram.pvddigest.event.TelegramSendMessageEvent
 import maratische.telegram.pvddigest.model.Post
 import maratische.telegram.pvddigest.model.PostStatuses
 import maratische.telegram.pvddigest.model.User
@@ -11,13 +8,10 @@ import maratische.telegram.pvddigest.model.UserRoles
 import maratische.telegram.pvddigest.repository.PostRepository
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
-import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.jvm.optionals.getOrNull
 
 
 @Service
@@ -38,93 +32,7 @@ open class PostService(
 
     fun findAllPublishedPosts() = messageRepository.findByStatus(PostStatuses.PUBLISHED)
 
-    //сгенерировать пост дайджест
-//    @Transactional
-    @EventListener(PublishDigestPostsEvent::class)
-    open fun publishPostsEvent(publishPostsEvent: PublishDigestPostsEvent) {
-        val posts = messageRepository.findByStatus(PostStatuses.PUBLISHED).sortedBy { it.date }
-        posts.filter { (it.date ?: 0) < System.currentTimeMillis() }.forEach {
-            it.status = PostStatuses.CLOSED
-            save(it)
-            eventPublisher.publishEvent(PostEvent(it.id))
-        }
-        val mainPost = posts.filter { (it.date ?: 0) >= System.currentTimeMillis() }.map { post ->
-            var content = (post.content ?: "").replace(dateTimeRegex, " ").replace(dateRegex, "")
-            content = short200(content)
-            "${
-                formatter.format(
-                    LocalDateTime.ofInstant(
-                        Instant.ofEpochMilli(post.date ?: 0),
-                        ZoneId.systemDefault()
-                    )
-                )
-            }\n" +
-                    "${content}\n" +
-                    "https://t.me/c/${SettingsUtil.publicSourceChatId()}/${post.messageId}"
-        }.joinToString(separator = "\n\n")
-        eventPublisher.publishEvent(
-            TelegramPublishDigestEvent(
-                "Дайджест ПВД (от ${formatter.format(LocalDateTime.now())})\n\n $mainPost \n\n" +
-                        "Для попадания в дайджест сообщение должно содержать тег #пвд, дату в формате #2024-11-29 или #2024-11-29Т18:00\n" +
-                        "и его должен одобрить модератор"
-            )
-        )
-    }
-
-    private fun short200(content: String?) = content?.substring(0, 200.coerceAtMost(content.length)) ?: ""
-
-    @EventListener(PostEvent::class)
-    open fun processPostEvent(postEvent: PostEvent) {
-        logger.info("process post {}", postEvent)
-        val postOptional = messageRepository.findById(postEvent.postId ?: return@processPostEvent)
-        if (postOptional.isPresent) {
-            val post = postOptional.get()
-            val user = userService.findById(post.userId).getOrNull()
-            when (post.status) {
-                PostStatuses.DRAFT, PostStatuses.REJECTED -> {
-                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, postEvent.message))
-                }
-
-                PostStatuses.MODERATING -> {
-                    eventPublisher.publishEvent(
-                        TelegramSendMessageEvent(
-                            user?.chatId,
-                            "Пост будет добавлен после одобрения модератором. ${short200(post.content)}"
-                        )
-                    )
-                    //написать модераторам
-                    var moderators = userService.listModerators()
-                    moderators.forEach {
-                        eventPublisher.publishEvent(
-                            TelegramSendMessageEvent(
-                                it.chatId,
-                                post.content
-                            )
-                        )
-                    }
-                }
-
-                PostStatuses.PUBLISHED -> {
-                    eventPublisher.publishEvent(
-                        TelegramSendMessageEvent(
-                            user?.chatId,
-                            "Пост опубликован. ${short200(post.content)}"
-                        )
-                    )
-                    eventPublisher.publishEvent(PublishDigestPostsEvent())
-                }
-
-                PostStatuses.CLOSED -> {
-                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, "Пост закрыт. ${post.content}"))
-                    //написать модераторам
-                }
-
-                null -> {
-                    logger.info("empty status")
-                }
-            }
-        }
-    }
+    fun short200(content: String?) = content?.substring(0, 200.coerceAtMost(content.length)) ?: ""
 
     /**
      * приходит сообщение,
