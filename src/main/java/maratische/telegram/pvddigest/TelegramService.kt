@@ -54,7 +54,7 @@ open class TelegramService(
     val closed = Regex("/closed[_-](\\d+)")
 
     //    @Transactional
-    open fun processPrivate(messageIn: maratische.telegram.pvddigest.Message, user: User) {
+    open fun processPrivate(messageIn: Message, user: User) {
         if (messageIn.text?.lowercase() == "/help" || messageIn.text?.lowercase() == "help") {
             processPrivateHelp(user)
             return
@@ -118,14 +118,15 @@ open class TelegramService(
         if (list.size > 5) {
             list = list.subList(0, 5)
         }
-        var buttons = list.map { post ->
+        val buttons = list.map { post ->
             "[{\"text\":\"/confirm_${post.id}\",\"hide\":false}," +
                     "{\"text\":\"/decline_${post.id}\",\"hide\":false}]"
         }.joinToString(separator = ",")
         list.forEach { post ->
             val user2 = userService.findById(post.userId).getOrNull()
             telegramClient.sendMessage(
-                user?.chatId.toString(), " ${post.date} - ${user2?.username}\n" +
+                user.chatId.toString(),
+                " ${post.date} - ${user2?.username}\n" +
                         "${post.id}\n" +
                         "${post.content}",
                 "{\"keyboard\":[[{\"text\":\"/moder\",\"hide\":false},{\"text\":\"/list\",\"hide\":false}]," + buttons + "]}"
@@ -147,13 +148,13 @@ open class TelegramService(
 
     private fun processPrivateList(user: User) {
         //список постов на дайджесте
-        var list = postService.findAllPublishedPosts()
-        var buttons = "[{\"text\":\"/_1\",\"hide\":false}," +
+        val list = postService.findAllPublishedPosts()
+        val buttons = "[{\"text\":\"/_1\",\"hide\":false}," +
                 "{\"text\":\"/closed_1\",\"hide\":false}]"
         list.forEach { post ->
-            val user2 = userService.findById(post.userId).getOrNull()
             telegramClient.sendMessage(
-                user?.chatId.toString(), "${post.messageId}\n" +
+                user.chatId.toString(),
+                "${post.messageId}\n" +
                         "${post.content}",
                 "{\"keyboard\":[[{\"text\":\"/moder\",\"hide\":false},{\"text\":\"/list\",\"hide\":false}]," + buttons + "]}"
             )
@@ -185,6 +186,11 @@ open class TelegramService(
         chatId: String, messageId: Long, text: String, markup: String = "",
         onResponse: ((acc: Response) -> Response)? = null
     ) = telegramClient.editMessage(chatId, messageId, text, markup, onResponse)
+
+    fun deleteMessage(
+        chatId: String, messageId: Long,
+        onResponse: ((acc: Response) -> Response)? = null
+    ) = telegramClient.deleteMessage(chatId, messageId, onResponse)
 
     @Scheduled(fixedDelay = 5000)
     fun scheduler() {

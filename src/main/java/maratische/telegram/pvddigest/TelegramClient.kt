@@ -14,7 +14,7 @@ class TelegramClient {
     private var secret = ""
 
     fun setSecret(secret: String) {
-        this.secret = secret;
+        this.secret = secret
     }
 
     var process: ItemProcess? = null
@@ -37,7 +37,7 @@ class TelegramClient {
                 }
 
                 override fun onResponse(call: Call, response: Response) {
-                    var responseBody = response.body?.string()
+                    val responseBody = response.body?.string()
                     val entity: GetUpdates =
                         gson.fromJson(responseBody, GetUpdates::class.java)
                     if (entity.ok && entity.result.isNotEmpty()) {
@@ -59,10 +59,11 @@ class TelegramClient {
         System.err.println(message)
     }
 
+    @Deprecated(message = "тчо то старое")
     fun processGetUpdatesItem(item: GetUpdatesItem) {
         System.out.println(item)
         if (item.message != null && item.message?.chat?.id == SettingsUtil.sourceChatId().toLong()) {
-            var message = item.message?.text ?: ""
+            val message = item.message?.text ?: ""
             if (message.lowercase().contains("#pvd")
                 || message.lowercase().contains("#пвд")
             ) {
@@ -86,9 +87,9 @@ class TelegramClient {
                 .setType(MultipartBody.FORM) // Header to show we are sending a Multipart Form Data
                 .addFormDataPart(
                     "chat_id",
-                    "$chatId"
+                    chatId
                 ) // other string params can be like userId, name or something
-                .addFormDataPart("from_chat_id", "$fromChatId")
+                .addFormDataPart("from_chat_id", fromChatId)
                 .addFormDataPart("disable_notification", "true")
                 .addFormDataPart(
                     "message_id",
@@ -124,11 +125,11 @@ class TelegramClient {
                 .setType(MultipartBody.FORM) // Header to show we are sending a Multipart Form Data
                 .addFormDataPart(
                     "chat_id",
-                    "$chatId"
+                    chatId
                 ) // other string params can be like userId, name or something
                 .addFormDataPart(
                     "text",
-                    "$text"
+                    text
                 ) // other string params can be like userId, name or something
                 .addFormDataPart("reply_markup", markup)
                 .addFormDataPart("disable_notification", "true")
@@ -161,7 +162,7 @@ class TelegramClient {
                 .setType(MultipartBody.FORM) // Header to show we are sending a Multipart Form Data
                 .addFormDataPart(
                     "chat_id",
-                    "$chatId"
+                    chatId
                 ) // other string params can be like userId, name or something
                 .addFormDataPart(
                     "message_id",
@@ -169,7 +170,7 @@ class TelegramClient {
                 ) // other string params can be like userId, name or something
                 .addFormDataPart(
                     "text",
-                    "$text"
+                    text
                 ) // other string params can be like userId, name or something
                 .addFormDataPart("reply_markup", markup)
                 .addFormDataPart("disable_notification", "true")
@@ -194,6 +195,42 @@ class TelegramClient {
     }
 
 
+    fun deleteMessage(
+        chatId: String, messageId: Long,
+        onResponse: ((acc: Response) -> Response)? = null
+    ) {
+        try {
+            val multipartBody: MultipartBody = MultipartBody.Builder()
+                .setType(MultipartBody.FORM) // Header to show we are sending a Multipart Form Data
+                .addFormDataPart(
+                    "chat_id",
+                    chatId
+                ) // other string params can be like userId, name or something
+                .addFormDataPart(
+                    "message_id",
+                    "$messageId"
+                ) // other string params can be like userId, name or something
+                .addFormDataPart("disable_notification", "true")
+                .build()
+            val request: Request = Request.Builder()
+                .url("$baseUrl${secret}/deleteMessage")
+                .post(multipartBody)
+                .build()
+            client.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    sendError("onFailure: ${e.message}")
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    if (onResponse != null) onResponse(response) else logger.info("onResponse deleteMessage -> ${response.body?.string()}")
+                }
+            })
+        } catch (e: Exception) {
+            sendError("onFailure: ${e.message}")
+            e.message
+        }
+    }
+
     companion object {
         private val logger = LoggerFactory.getLogger(TelegramClient::class.java)
     }
@@ -201,7 +238,7 @@ class TelegramClient {
 }
 
 interface ItemProcess {
-    fun process(item: GetUpdatesItem);
+    fun process(item: GetUpdatesItem)
 }
 
 data class OnSendMessageReponse(

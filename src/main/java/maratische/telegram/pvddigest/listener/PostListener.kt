@@ -38,11 +38,11 @@ open class PostListener(
                     eventPublisher.publishEvent(
                         TelegramSendMessageEvent(
                             user?.chatId,
-                            "Пост будет добавлен после одобрения модератором. ${postService.short200(post.content)}"
+                            "Пост будет добавлен после одобрения модератором: ${postService.short200(post.content)}"
                         )
                     )
                     //написать модераторам
-                    var moderators = userService.listModerators()
+                    val moderators = userService.listModerators()
                     moderators.forEach {
                         eventPublisher.publishEvent(
                             TelegramSendMessageEvent(
@@ -57,14 +57,14 @@ open class PostListener(
                     eventPublisher.publishEvent(
                         TelegramSendMessageEvent(
                             user?.chatId,
-                            "Пост опубликован. ${postService.short200(post.content)}"
+                            "Пост опубликован: ${postService.short200(post.content)}"
                         )
                     )
                     eventPublisher.publishEvent(PublishDigestPostsEvent())
                 }
 
                 PostStatuses.CLOSED -> {
-                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, "Пост закрыт. ${post.content}"))
+                    eventPublisher.publishEvent(TelegramSendMessageEvent(user?.chatId, "Пост закрыт: ${post.content}"))
                     //написать модераторам
                 }
 

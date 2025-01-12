@@ -1,5 +1,6 @@
 package maratische.telegram.pvddigest
 
+import maratische.telegram.pvddigest.event.PostDeleteEvent
 import maratische.telegram.pvddigest.event.PostEvent
 import maratische.telegram.pvddigest.model.Post
 import maratische.telegram.pvddigest.model.PostStatuses
@@ -47,10 +48,10 @@ open class PostService(
      * если сообщение является ответом на  другое и автор - админ-модератор, добавляем его в дайджест
      */
 //    @Transactional
-    open fun processMessage(messageIn: maratische.telegram.pvddigest.Message, user: User): Post? {
+    open fun processMessage(messageIn: Message, user: User): Post? {
         logger.info("process post {} from {}", messageIn, user)
         val messageText = messageIn.text ?: ""
-        var postDb = findByMessageId(messageIn.message_id ?: 0L)
+        var postDb = findByMessageId(messageIn.message_id)
         var message = ""
         if (messageText.lowercase().startsWith("/digest ") && messageIn.reply_to_message != null
             && (user.role == UserRoles.ADMIN || user.role == UserRoles.MODERATOR)
@@ -59,13 +60,16 @@ open class PostService(
             if (date > 0) {
                 postDb = findByMessageId(messageIn.reply_to_message?.message_id ?: 0L) ?: Post()
                 postDb.messageId = messageIn.reply_to_message?.message_id
-                postDb.userId = user.id
+                val userReply = userService.getOtCreateUser(messageIn.reply_to_message?.from)
+                postDb.userId = userReply?.id ?: user.id
                 postDb.created = System.currentTimeMillis()
                 postDb.status = PostStatuses.PUBLISHED
                 postDb.content = messageIn.reply_to_message?.text
                 postDb.date = parseDate(messageText)
                 postDb.updated = System.currentTimeMillis()
                 postDb = save(postDb)
+                eventPublisher.publishEvent(PostDeleteEvent(messageIn.chat?.id!!, messageIn.message_id))
+//                telegramService.deleteMessage(messageIn.chat?.id.toString(), messageIn.message_id)
             }
         } else
         if (messageText.lowercase().contains("#pvd")

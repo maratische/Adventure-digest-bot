@@ -2,6 +2,7 @@ package maratische.telegram.pvddigest.listener
 
 import maratische.telegram.pvddigest.PostService
 import maratische.telegram.pvddigest.SettingsUtil
+import maratische.telegram.pvddigest.UserService
 import maratische.telegram.pvddigest.event.PostEvent
 import maratische.telegram.pvddigest.event.PublishDigestPostsEvent
 import maratische.telegram.pvddigest.event.TelegramPublishDigestEvent
@@ -13,12 +14,14 @@ import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlin.jvm.optionals.getOrNull
 
 @Service
 open class PublishDigestPostsListener(
     private val messageRepository: PostRepository,
     private val eventPublisher: ApplicationEventPublisher,
     private var postService: PostService,
+    private val userService: UserService,
 ) {
 
     //сгенерировать пост дайджест
@@ -35,6 +38,7 @@ open class PublishDigestPostsListener(
             var content =
                 (post.content ?: "").replace(postService.dateTimeRegex, " ").replace(postService.dateRegex, "")
             content = postService.short200(content)
+            val user = userService.findById(post.userId).getOrNull()
             "${
                 postService.formatter.format(
                     LocalDateTime.ofInstant(
@@ -44,6 +48,7 @@ open class PublishDigestPostsListener(
                 )
             }\n" +
                     "${content}\n" +
+                    "@${user?.username}\n" +
                     "https://t.me/c/${SettingsUtil.publicSourceChatId()}/${post.messageId}"
         }.joinToString(separator = "\n\n")
         eventPublisher.publishEvent(
