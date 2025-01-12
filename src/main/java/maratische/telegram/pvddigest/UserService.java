@@ -59,8 +59,18 @@ public class UserService {
         return users;
     }
 
+    public List<User> list() {
+        ArrayList<User> users = new ArrayList<>();
+        userRepository.findAll().forEach(users::add);
+        return users;
+    }
+
     public Optional<User> findById(Long userId) {
         return userRepository.findById(userId);
+    }
+
+    public User findByUsername(String username) {
+        return userRepository.findByUsername(username);
     }
 
     public User save(User user) {

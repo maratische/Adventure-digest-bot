@@ -43,8 +43,9 @@ open class IncomingMessageListener(
     }
 
 
-    val confirm = Regex("/confirm_(\\d+)")
-    val decline = Regex("/decline_(\\d+)")
+    val userrole = Regex("/userrole[_-](\\w+)\\s(.*)")
+    val confirm = Regex("/confirm[_-](\\d+)")
+    val decline = Regex("/decline[_-](\\d+)")
     val closed = Regex("/closed[_-](\\d+)")
 
     //    @Transactional
@@ -53,17 +54,23 @@ open class IncomingMessageListener(
             processPrivateHelp(user)
             return
         }
-        if (messageIn.text?.lowercase() == "/list" && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
-            processPrivateList(user)
+        if (messageIn.text?.lowercase() == "/users" && user.role == UserRoles.ADMIN) {
+            processAdminUsersList(user)
+            return
+        }
+        val matchUserrole = userrole.find(messageIn.text ?: "")
+        if (matchUserrole != null && user.role == UserRoles.ADMIN) {
+            processAdminSetRoleUser(user, matchUserrole.groupValues[1], matchUserrole.groupValues[2])
+            processModeratorPrivateList(user)
             return
         }
         val matchClosed = closed.find(messageIn.text ?: "")
         if (matchClosed != null && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
-            processPrivateClosed(matchClosed, user)
+            processModeratorPrivateClosed(matchClosed, user)
             return
         }
         if (messageIn.text?.lowercase() == "/moder" && (user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN)) {
-            processPrivateModer(user)
+            processModeratorPrivateModer(user)
             return
         }
         if (messageIn.text?.lowercase() == "/digest" && user.role == UserRoles.ADMIN) {
@@ -106,7 +113,7 @@ open class IncomingMessageListener(
         }
     }
 
-    private fun processPrivateModer(user: User) {
+    private fun processModeratorPrivateModer(user: User) {
         //список постов на модерацию
         var list = postService.findAllModeratingPosts()
         if (list.size > 5) {
@@ -128,7 +135,7 @@ open class IncomingMessageListener(
         }
     }
 
-    private fun processPrivateClosed(matchClosed: MatchResult, user: User) {
+    private fun processModeratorPrivateClosed(matchClosed: MatchResult, user: User) {
         val id = matchClosed.groupValues[1].toLong()
         val postOptional = postService.findByMessageId(id)
         if (postOptional != null) {
@@ -140,11 +147,13 @@ open class IncomingMessageListener(
         }
     }
 
-    private fun processPrivateList(user: User) {
+    private fun processModeratorPrivateList(user: User) {
         //список постов на дайджесте
         val list = postService.findAllPublishedPosts()
         val buttons = "[{\"text\":\"/_1\",\"hide\":false}," +
-                "{\"text\":\"/closed_1\",\"hide\":false}]"
+                "{\"text\":\"/closed_1\",\"hide\":false}]" +
+                "[{\"text\":\"/confirm_1\",\"hide\":false}," +
+                "{\"text\":\"/decline_1\",\"hide\":false}]"
         list.forEach { post ->
             telegramService.sendMessage(
                 user.chatId.toString(),
@@ -152,6 +161,45 @@ open class IncomingMessageListener(
                         "${post.content}",
                 "{\"keyboard\":[[{\"text\":\"/moder\",\"hide\":false},{\"text\":\"/list\",\"hide\":false}]," + buttons + "]}"
             )
+        }
+    }
+
+    private fun processAdminUsersList(user: User) {
+        val list = userService.list().sortedBy { it -> it.role }
+        val message = list.map { it -> "${it.role?.name ?: ""} - ${it.username} - ${it.firstname}" }
+            .joinToString(separator = "\n") + "\n"
+        "/userrole_BANNED 1\n" +
+                "/userrole_BEGINNER 1\n" +
+                "/userrole_TRAVELER 1\n" +
+                "/userrole_ADVANCED 1\n" +
+                "/userrole_MODERATOR 1\n" +
+                "/userrole_ADMIN 1\n"
+        telegramService.sendMessage(
+            user.chatId.toString(),
+            message
+        )
+    }
+
+    private fun processAdminSetRoleUser(user: User, roleName: String, username: String) {
+        try {
+            val role = UserRoles.valueOf(roleName)
+            val user2 = userService.findByUsername(username)
+            if (user2 == null) {
+                telegramService.sendMessage(
+                    user.chatId.toString(),
+                    "user $username не найдем"
+                )
+                return
+            }
+            user2.role = role
+            userService.save(user2)
+            val message = "$role to $username"
+            telegramService.sendMessage(
+                user.chatId.toString(),
+                message
+            )
+        } catch (e: Exception) {
+            logger.error(e.message)
         }
     }
 
@@ -164,6 +212,9 @@ open class IncomingMessageListener(
             text += "/moder - список на подерацию\n"
             text += "/digest - перегенерирует дайджест\n"
             text += "/digest #2024-12-12 - ответ на какое то сообщение, добавляет его в дайджест\n"
+        }
+        if (user.role == UserRoles.ADMIN) {
+            text += "/users - список пользователей\n"
         }
         telegramService.sendMessage(user.chatId.toString(), text)
     }
