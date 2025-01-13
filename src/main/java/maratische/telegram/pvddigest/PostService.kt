@@ -19,7 +19,8 @@ import java.time.format.DateTimeFormatter
 open class PostService(
     private val messageRepository: PostRepository,
     private val eventPublisher: ApplicationEventPublisher,
-    private val userService: UserService
+    private val userService: UserService,
+    private val postRepository: PostRepository
 ) {
     var formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
     val dateRegex = Regex("#(\\d{4})-(\\d{1,2})-(\\d{1,2})")
@@ -87,8 +88,18 @@ open class PostService(
             if ((postDb.date ?: 0) > 0) {//готов к модерации
                 postDb.status = if (user.role == UserRoles.BEGINNER) {
                     PostStatuses.MODERATING
-                } else {
+                } else if (user.role == UserRoles.TRAVELER) {
+                    val posts = postRepository.findByUserAndStatus(user.id, PostStatuses.PUBLISHED)
+                        .filter { Math.abs(it.date!! - postDb!!.date!!) < 1000 * 60 * 60 * 24 }
+                    if (posts.isNotEmpty()) {
+                        PostStatuses.MODERATING
+                    } else {
+                        PostStatuses.PUBLISHED
+                    }
+                } else if (user.role == UserRoles.ADVANCED || user.role == UserRoles.MODERATOR || user.role == UserRoles.ADMIN) {
                     PostStatuses.PUBLISHED
+                } else {
+                    PostStatuses.REJECTED
                 }
             } else {
                 postDb.status = PostStatuses.DRAFT

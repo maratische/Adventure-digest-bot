@@ -22,23 +22,30 @@ open class IncomingMessageListener(
 ) {
     @EventListener(IncomingMessageEvent::class)
     open fun processIncomingMessageEvent(incomingMessageEvent: IncomingMessageEvent) {
-        val message = incomingMessageEvent.message
-        val user = userService.getOtCreateUser(message.from)
-        if (user != null && message.chat != null) {
-            if (message.chat?.id == SettingsUtil.sourceChatId().toLong()) {
-                //работаем с нашей группой
-                postService.processMessage(message, user)
-            } else
-                if (message.chat?.type == "private") {
-                    //персональный чат
-                    if (user.chatId == null) {
-                        user.chatId = message.chat?.id
-                        userService.save(user)
+        try {
+            val message = incomingMessageEvent.message
+            val user = userService.getOtCreateUser(message.from)
+            if (user.role == UserRoles.BANNED) {
+                return
+            }
+            if (user != null && message.chat != null) {
+                if (message.chat?.id == SettingsUtil.sourceChatId().toLong()) {
+                    //работаем с нашей группой
+                    postService.processMessage(message, user)
+                } else
+                    if (message.chat?.type == "private") {
+                        //персональный чат
+                        if (user.chatId == null) {
+                            user.chatId = message.chat?.id
+                            userService.save(user)
+                        }
+                        processPrivate(message, user)
+                    } else {
+                        logger.info("process post in unknown chat {} message {}", message.chat, message)
                     }
-                    processPrivate(message, user)
-                } else {
-                    logger.info("process post in unknown chat {} message {}", message.chat, message)
-                }
+            }
+        } catch (e: Exception) {
+            logger.error("error on parse message $incomingMessageEvent")
         }
     }
 
@@ -167,7 +174,7 @@ open class IncomingMessageListener(
     private fun processAdminUsersList(user: User) {
         val list = userService.list().sortedBy { it -> it.role }
         val message = list.map { it -> "${it.role?.name ?: ""} - ${it.username} - ${it.firstname}" }
-            .joinToString(separator = "\n") + "\n"
+            .joinToString(separator = "\n") + "\n" +
         "/userrole_BANNED 1\n" +
                 "/userrole_BEGINNER 1\n" +
                 "/userrole_TRAVELER 1\n" +

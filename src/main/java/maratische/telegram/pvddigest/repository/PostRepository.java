@@ -17,4 +17,7 @@ public interface PostRepository extends CrudRepository<Post, Long> {
     @Query("select u from Post u where u.status = ?1")
     List<Post> findByStatus(PostStatuses status);
 
+    @Query("select u from Post u where u.userId = ?1 and u.status = ?2")
+    List<Post> findByUserAndStatus(Long userId, PostStatuses status);
+
 }
