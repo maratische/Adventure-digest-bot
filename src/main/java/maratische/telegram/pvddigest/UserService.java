@@ -73,6 +73,10 @@ public class UserService {
         return userRepository.findByUsername(username);
     }
 
+    public User findByTelegramId(Long telegramId) {
+        return userRepository.findByTelegramId(telegramId);
+    }
+
     public User save(User user) {
         return userRepository.save(user);
     }

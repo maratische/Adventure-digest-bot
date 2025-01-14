@@ -173,7 +173,7 @@ open class IncomingMessageListener(
 
     private fun processAdminUsersList(user: User) {
         val list = userService.list().sortedBy { it -> it.role }
-        val message = list.map { it -> "${it.role?.name ?: ""} - ${it.username} - ${it.firstname}" }
+        val message = list.map { it -> "${it.role?.name ?: ""} - ${it.telegramId} - ${it.username} - ${it.firstname}" }
             .joinToString(separator = "\n") + "\n" +
         "/userrole_BANNED 1\n" +
                 "/userrole_BEGINNER 1\n" +
@@ -187,20 +187,20 @@ open class IncomingMessageListener(
         )
     }
 
-    private fun processAdminSetRoleUser(user: User, roleName: String, username: String) {
+    private fun processAdminSetRoleUser(user: User, roleName: String, id: String) {
         try {
             val role = UserRoles.valueOf(roleName)
-            val user2 = userService.findByUsername(username)
+            val user2 = userService.findByTelegramId(id.toLong())
             if (user2 == null) {
                 telegramService.sendMessage(
                     user.chatId.toString(),
-                    "user $username не найдем"
+                    "user $id не найдем"
                 )
                 return
             }
             user2.role = role
             userService.save(user2)
-            val message = "$role to $username"
+            val message = "$role to $user2"
             telegramService.sendMessage(
                 user.chatId.toString(),
                 message
