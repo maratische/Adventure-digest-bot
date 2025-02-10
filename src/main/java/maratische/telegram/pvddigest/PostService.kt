@@ -2,6 +2,7 @@ package maratische.telegram.pvddigest
 
 import maratische.telegram.pvddigest.event.PostDeleteEvent
 import maratische.telegram.pvddigest.event.PostEvent
+import maratische.telegram.pvddigest.event.PostForwardEvent
 import maratische.telegram.pvddigest.model.Post
 import maratische.telegram.pvddigest.model.PostStatuses
 import maratische.telegram.pvddigest.model.User
@@ -73,7 +74,9 @@ open class PostService(
 //                telegramService.deleteMessage(messageIn.chat?.id.toString(), messageIn.message_id)
             }
         } else
-        if (messageText.lowercase().contains("#pvd")
+            if (messageText.lowercase().contains("#флакон")) {
+                eventPublisher.publishEvent(PostForwardEvent(messageIn.chat?.id!!, messageIn.message_id))
+            } else if (messageText.lowercase().contains("#pvd")
             || messageText.lowercase().contains("#пвд")
         ) {
             if (postDb == null) {//новое сообщение, сохраняем

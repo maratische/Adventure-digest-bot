@@ -6,3 +6,6 @@
 /pvdDigest.prop
 /testdb.mv.db
 /testdb.trace.db
+/pvdDigest.Digest_snowTrips_bot.prop
+/pvdDigest.PvdDigest_dev_bot.prop
+/logFile.*

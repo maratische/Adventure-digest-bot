@@ -43,6 +43,14 @@ open class TelegramService(
         onResponse: ((acc: Response) -> Response)? = null
     ) = telegramClient.deleteMessage(chatId, messageId, onResponse)
 
+
+    fun forwardMessage(
+        chatSourceId: String,
+        chatDestinationId: String,
+        messageId: Long,
+        onResponse: ((acc: Response) -> Response)? = null
+    ) = telegramClient.forwardMessage(chatSourceId, chatDestinationId, messageId, onResponse)
+
     @Scheduled(fixedDelay = 5000)
     fun scheduler() {
         telegramClient.getAllTelegramUpdates()

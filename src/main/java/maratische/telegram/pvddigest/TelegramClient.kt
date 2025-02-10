@@ -81,7 +81,10 @@ class TelegramClient {
         SettingsUtil.save()
     }
 
-    fun forwardMessage(chatId: String, fromChatId: String, messageId: Long) {
+    fun forwardMessage(
+        fromChatId: String, chatId: String, messageId: Long,
+        onResponse: ((acc: Response) -> Response)? = null
+    ) {
         try {
             val multipartBody: MultipartBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM) // Header to show we are sending a Multipart Form Data
@@ -107,7 +110,7 @@ class TelegramClient {
                 }
 
                 override fun onResponse(call: Call, response: Response) {
-                    System.out.println("onResponse -> ${response.body?.string()}")
+                    if (onResponse != null) onResponse(response) else logger.info("onResponse Forward -> ${response.body?.string()}")
                 }
             })
         } catch (e: Exception) {
