@@ -1,25 +1,25 @@
 package maratische.telegram.pvddigest.model
 
-import jakarta.persistence.*
+import org.springframework.data.annotation.Id
+import org.springframework.data.relational.core.mapping.Column
+import org.springframework.data.relational.core.mapping.Table
 
-@Entity
+
 @Table(name = "posts")
 class Post {
     @Id
-    @Column(name = "id")
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+//    @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null
 
-    @Column(name = "message_id", columnDefinition = "bigint", unique = true)
+    @Column(value = "message_id")
+//    @Column(name = "message_id", columnDefinition = "bigint", unique = true)
     var messageId: Long? = null
 
-    //    @ManyToOne//(cascade = [(CascadeType.ALL)])
-//    @JoinColumn(name = "user_id")
-//    var user: User? = null
-    @Column(name = "user_id", columnDefinition = "bigint")
+    @Column(value = "user_id")
+//    @Column(name = "user_id", columnDefinition = "bigint")
     var userId: Long? = null
 
-    @Lob
+    //    @Lob
     var content: String? = null
 
     var date: Long? = null
@@ -27,8 +27,16 @@ class Post {
     var created: Long? = null
     var updated: Long? = null
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status")
+    //    @Enumerated(EnumType.STRING)
+//@Column(name = "status")
+    @Column(value = "status")
     var status: PostStatuses? = null
 
+    constructor()
+
+    constructor(messageId: Long, userId: Long?) {
+        this.messageId = messageId
+        this.userId = userId
+        this.created = System.currentTimeMillis()
+    }
 }

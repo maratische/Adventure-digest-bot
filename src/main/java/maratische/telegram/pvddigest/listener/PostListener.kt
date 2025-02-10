@@ -25,7 +25,7 @@ open class PostListener(
     @EventListener(PostEvent::class)
     open fun processPostEvent(postEvent: PostEvent) {
         logger.info("process post {}", postEvent)
-        val postOptional = messageRepository.findById(postEvent.postId ?: return@processPostEvent)
+        val postOptional = messageRepository.findById(postEvent.postId ?: return@processPostEvent).blockOptional()
         if (postOptional.isPresent) {
             val post = postOptional.get()
             val user = userService.findById(post.userId).getOrNull()

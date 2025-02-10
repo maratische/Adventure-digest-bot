@@ -2,20 +2,20 @@ package maratische.telegram.pvddigest.repository;
 
 import maratische.telegram.pvddigest.model.User;
 import maratische.telegram.pvddigest.model.UserRoles;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Repository
-public interface UserRepository extends CrudRepository<User, Long> {
-    User findByUsername(String username);
+public interface UserRepository extends ReactiveCrudRepository<User, Long> {
+    Mono<User> findByUsername(String username);
 
-    @Query("select u from User u where u.telegramId = ?1")
-    User findByTelegramId(Long telegramId);
+    @Query("select * from users u where u.telegram_id = :telegramId")
+    Mono<User> findByTelegramId(Long telegramId);
 
-    @Query("select u from User u where u.role = ?1")
-    List<User> findByRole(UserRoles role);
+    @Query("select * from users u where u.role = :role")
+    Flux<User> findByRole(UserRoles role);
 
 }

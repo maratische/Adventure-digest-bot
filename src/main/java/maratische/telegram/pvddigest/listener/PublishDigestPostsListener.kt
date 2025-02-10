@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.stream.Collectors
 import kotlin.jvm.optionals.getOrNull
 
 @Service
@@ -28,10 +29,11 @@ open class PublishDigestPostsListener(
 //    @Transactional
     @EventListener(PublishDigestPostsEvent::class)
     open fun publishPostsEvent(publishPostsEvent: PublishDigestPostsEvent) {
-        val posts = messageRepository.findByStatus(PostStatuses.PUBLISHED).sortedBy { it.date }
+        val posts = messageRepository.findByStatus(PostStatuses.PUBLISHED).toStream().collect(Collectors.toList())
+            .sortedBy { it.date }
         posts.filter { (it.date ?: 0) < System.currentTimeMillis() }.forEach {
             it.status = PostStatuses.CLOSED
-            postService.save(it)
+            postService.save(it).subscribe()
             eventPublisher.publishEvent(PostEvent(it.id))
         }
         val mainPost = posts.filter { (it.date ?: 0) >= System.currentTimeMillis() }.map { post ->

@@ -1,13 +1,16 @@
 package maratische.telegram.pvddigest;
 
-import jakarta.annotation.PostConstruct;
 import maratische.telegram.pvddigest.model.User;
 import maratische.telegram.pvddigest.model.UserRoles;
 import maratische.telegram.pvddigest.repository.UserRepository;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,69 +18,73 @@ import java.util.Optional;
 
 @Service
 public class UserService {
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
     @Autowired
     private UserRepository userRepository;
 
     @Value("${pvddigest.admin}")
     private String admin;
 
-    @PostConstruct
-    public void init() {
+    public Mono<User> processAdmin() {
         if (!StringUtils.isEmpty(admin)) {
-            var user = userRepository.findByUsername(admin);
-            if (user != null && user.getRole() != UserRoles.ADMIN) {
-                user.setRole(UserRoles.ADMIN);
-                userRepository.save(user);
-            }
+            return userRepository.findByUsername(admin).filter(
+                    user -> user.getRole() != UserRoles.ADMIN
+            ).flatMap(
+                    user -> {
+                        user.setRole(UserRoles.ADMIN);
+                        return userRepository.save(user);
+                    }
+            );
         }
+        return Mono.empty();
     }
 
     //    @Transactional
-    public User getOtCreateUser(MessageUser messageUser) {
-        if (messageUser != null) {
-            var user = userRepository.findByTelegramId(messageUser.getId());
-            if (user == null) {
-                user = new User();
-            }
-            if (!StringUtils.equals(user.getUsername(), messageUser.getUsername())
-                    || !StringUtils.equals(user.getFirstname(), messageUser.getFirst_name())) {
-                user.setTelegramId(messageUser.getId());
-                user.setUsername(messageUser.getUsername());
-                user.setFirstname(messageUser.getFirst_name());
-                user.setRole(UserRoles.BEGINNER);
-                return save(user);
-            }
-            return user;
+    public Mono<User> getOtCreateUser(MessageUser messageUser) {
+        if (messageUser == null) {
+            return Mono.empty();
         }
-        return null;
+        return userRepository.findByTelegramId(messageUser.getId()).switchIfEmpty(Mono.just(new User()))
+                .flatMap(
+                        user -> {
+                            if (!StringUtils.equals(user.getUsername(), messageUser.getUsername())
+                                    || !StringUtils.equals(user.getFirstname(), messageUser.getFirst_name())) {
+                                user.setTelegramId(messageUser.getId());
+                                user.setUsername(messageUser.getUsername());
+                                user.setFirstname(messageUser.getFirst_name());
+                                user.setRole(UserRoles.BEGINNER);
+                                return save(user);
+                            }
+                            return Mono.just(user);
+                        }
+                );
     }
 
     public List<User> listModerators() {
         ArrayList<User> users = new ArrayList<>();
-        users.addAll(userRepository.findByRole(UserRoles.MODERATOR));
-        users.addAll(userRepository.findByRole(UserRoles.ADMIN));
+        users.addAll(userRepository.findByRole(UserRoles.MODERATOR).toStream().toList());
+        users.addAll(userRepository.findByRole(UserRoles.ADMIN).toStream().toList());
         return users;
     }
 
-    public List<User> list() {
-        ArrayList<User> users = new ArrayList<>();
-        userRepository.findAll().forEach(users::add);
-        return users;
+    public Flux<User> list() {
+//        ArrayList<User> users = new ArrayList<>();
+        return userRepository.findAll();
     }
 
     public Optional<User> findById(Long userId) {
-        return userRepository.findById(userId);
+        return Optional.ofNullable(userRepository.findById(userId).block());
     }
 
     public User findByUsername(String username) {
-        return userRepository.findByUsername(username);
+        return userRepository.findByUsername(username).block();
     }
 
     public User findByTelegramId(Long telegramId) {
-        return userRepository.findByTelegramId(telegramId);
+        return userRepository.findByTelegramId(telegramId).block();
     }
 
-    public User save(User user) {
+    public Mono<User> save(User user) {
         return userRepository.save(user);
     }
 }
