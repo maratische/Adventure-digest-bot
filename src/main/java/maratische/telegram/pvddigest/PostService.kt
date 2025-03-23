@@ -37,6 +37,33 @@ open class PostService(
 
     fun short200(content: String?) = content?.substring(0, 200.coerceAtMost(content.length)) ?: ""
 
+//    @Transactional
+    open fun processMessage(messageIn: Message, user: User): Post? {
+        logger.info("process post {} from {}", messageIn, user)
+    if (SettingsUtil.mode() == "digest") {
+        return processMessageDigest(messageIn, user);
+    } else
+        if (SettingsUtil.mode() == "snowtrips") {
+            return processMessageSnowtrips(messageIn, user);
+        } else
+            if (SettingsUtil.mode() == "baraholka") {
+                return processMessageBaraholka(messageIn, user);
+            }
+    return null
+}
+
+    open fun processMessageBaraholka(messageIn: Message, user: User): Post? {
+        return null
+    }
+
+    open fun processMessageSnowtrips(messageIn: Message, user: User): Post? {
+        val messageText = messageIn.text ?: ""
+        if (messageText.lowercase().contains("#флакон")) {
+            eventPublisher.publishEvent(PostForwardEvent(messageIn.chat?.id!!, messageIn.message_id))
+        }
+        return null
+    }
+
     /**
      * приходит сообщение,
      * если новое
@@ -49,9 +76,7 @@ open class PostService(
      * /digest #2024-12-12
      * если сообщение является ответом на  другое и автор - админ-модератор, добавляем его в дайджест
      */
-//    @Transactional
-    open fun processMessage(messageIn: Message, user: User): Post? {
-        logger.info("process post {} from {}", messageIn, user)
+    open fun processMessageDigest(messageIn: Message, user: User): Post? {
         val messageText = messageIn.text ?: ""
         var postDb = findByMessageId(messageIn.message_id)
         var message = ""
@@ -74,9 +99,7 @@ open class PostService(
 //                telegramService.deleteMessage(messageIn.chat?.id.toString(), messageIn.message_id)
             }
         } else
-            if (messageText.lowercase().contains("#флакон")) {
-                eventPublisher.publishEvent(PostForwardEvent(messageIn.chat?.id!!, messageIn.message_id))
-            } else if (messageText.lowercase().contains("#pvd")
+            if (messageText.lowercase().contains("#pvd")
             || messageText.lowercase().contains("#пвд")
         ) {
             if (postDb == null) {//новое сообщение, сохраняем

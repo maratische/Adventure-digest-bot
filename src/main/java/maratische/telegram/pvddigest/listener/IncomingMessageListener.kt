@@ -57,6 +57,24 @@ open class IncomingMessageListener(
 
     //    @Transactional
     fun processPrivate(messageIn: Message, user: User) {
+        if (SettingsUtil.mode() == "digest") {
+            return processPrivateDigest(messageIn, user);
+        } else
+            if (SettingsUtil.mode() == "snowtrips") {
+                return processPrivateSnowtrips(messageIn, user);
+            } else
+                if (SettingsUtil.mode() == "baraholka") {
+                    return processPrivateBaraholka(messageIn, user);
+                }
+    }
+
+    fun processPrivateBaraholka(messageIn: Message, user: User) {
+    }
+
+    fun processPrivateSnowtrips(messageIn: Message, user: User) {
+    }
+
+    fun processPrivateDigest(messageIn: Message, user: User) {
         if (messageIn.text?.lowercase() == "/help" || messageIn.text?.lowercase() == "help") {
             processPrivateHelp(user)
             return

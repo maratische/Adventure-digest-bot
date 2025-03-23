@@ -39,5 +39,10 @@ class SettingsUtil {
         fun sourceChatId(): String = appProps.getProperty("source_chat_id", "10000")
         fun publicSourceChatId(): String = appProps.getProperty("public_source_chat_id", "10000")
 
+        //mode = digest - режим работы дайджестов
+        //mode = snowtrips - режим работы для снежной тусовки, репостить сообщения
+        //mode = baraholka - режим барахолка, пишешь заявку боту, проверка админом и подписка на каналы
+        fun mode(): String = appProps.getProperty("mode", "digest")
+
     }
 }

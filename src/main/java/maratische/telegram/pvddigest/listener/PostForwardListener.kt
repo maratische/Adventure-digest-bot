@@ -12,7 +12,7 @@ class PostForwardListener(
 ) {
 
     @EventListener(PostForwardEvent::class)
-    open fun processPostDeleteEvent(postEvent: PostForwardEvent) {
+    fun processPostDeleteEvent(postEvent: PostForwardEvent) {
         telegramService.forwardMessage(
             postEvent.chatId.toString(),
             SettingsUtil.destinationChannelId(),
